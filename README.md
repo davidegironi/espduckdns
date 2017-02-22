@@ -1,7 +1,7 @@
 # ESPDuckDNS: ESP8266 Duck DNS client
 
 
-ESPDuckDNS is a **open source Duck DNS client based on ESP8266**.
+ESPDuckDNS is an **open source Duck DNS client based on ESP8266**.
 
 
 ## Development
