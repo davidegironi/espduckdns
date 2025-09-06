@@ -45,7 +45,7 @@ extern "C" {
 #define DDNS_STATUSLED 2
 
 //define the wifi status led port
-#define WIFIMANAGERSETSTATUS_LED BUILTIN_LED
+#define WIFIMANAGERSETSTATUS_LED LED_BUILTIN
 
 //define connection status
 #define WIFIMANAGERSETSTATUS_STARTAP 0 
@@ -113,6 +113,56 @@ const char DUCKDNS_GETREQUEST[] PROGMEM = "http://www.duckdns.org/update?domains
 //initializer server
 ESP8266WebServer server(80);
 
+
+//populate main page conent
+String page() {
+  String content = "";
+  content += FPSTR(HTTP_PAGE);
+  content += FPSTR(HTTP_HTMLSTART);
+  content += FPSTR(HTTP_HEADSTART);
+  content += FPSTR(HTTP_HEADMETA);
+  content += FPSTR(HTTP_HEADTITLE);
+  content += FPSTR(HTTP_HEADSTYLE);
+  content += FPSTR(HTTP_HEADSCRIPT);
+  content += FPSTR(HTTP_HEADEND);
+  content += FPSTR(HTTP_BODYSTART);
+  content += FPSTR(HTTP_CONTENTSTART);
+  content += "{c}";
+  content += FPSTR(HTTP_CONTENTEND);
+  content += FPSTR(HTTP_BODYEND);
+  content += FPSTR(HTTP_HTMLEND);
+  return content;
+}
+
+//ddns eeprom read
+void ddnsEEPROMread() {
+  EEPROM.get(0, ddnsConfiguration);
+}
+
+//ddns eeprom write
+void ddnsEEPROMwrite() {
+  EEPROM.put(0, ddnsConfiguration);
+  EEPROM.commit();
+}
+
+//ddns eeprom read
+void ddnsEEPROMinit() {
+  EEPROM.begin(512);
+  delay(10);
+  ddnsEEPROMread();
+  if(ddnsConfiguration.initialized != 0x10) {
+#if defined SERIAL_ENABLED
+    Serial.println("Initialize eeprom");
+#endif
+    ddnsConfiguration.initialized = 0x10;
+    ddnsConfiguration.deviceid = 1;
+    strcpy(ddnsConfiguration.domain, "domain");
+    strcpy(ddnsConfiguration.token, "token");
+    ddnsConfiguration.updateinterval = 10;
+    ddnsEEPROMwrite();
+  }
+}
+
 //emit home page
 void pageHome() {
   int s = 0;
@@ -135,7 +185,7 @@ void pageHome() {
   h = (m / 60);
   s = s % 60;
   m = m % 60;
-  char lastupdatetimec[13];
+  char lastupdatetimec[16];
   snprintf(lastupdatetimec, sizeof(lastupdatetimec),"%02dh %02dm %02ds", h, m, s);
 
   //get next update time
@@ -145,7 +195,7 @@ void pageHome() {
   h = (m / 60);
   s = s % 60;
   m = m % 60;
-  char nextupdatetimec[13];
+  char nextupdatetimec[16];
   snprintf(nextupdatetimec, sizeof(nextupdatetimec),"%02dh %02dm %02ds", h, m, s);
   
   //set page content
@@ -252,26 +302,6 @@ void pageNotFound() {
   server.send(200, "text/html", content);
 }
 
-//populate main page conent
-String page() {
-  String content = "";
-  content += FPSTR(HTTP_PAGE);
-  content += FPSTR(HTTP_HTMLSTART);
-  content += FPSTR(HTTP_HEADSTART);
-  content += FPSTR(HTTP_HEADMETA);
-  content += FPSTR(HTTP_HEADTITLE);
-  content += FPSTR(HTTP_HEADSTYLE);
-  content += FPSTR(HTTP_HEADSCRIPT);
-  content += FPSTR(HTTP_HEADEND);
-  content += FPSTR(HTTP_BODYSTART);
-  content += FPSTR(HTTP_CONTENTSTART);
-  content += "{c}";
-  content += FPSTR(HTTP_CONTENTEND);
-  content += FPSTR(HTTP_BODYEND);
-  content += FPSTR(HTTP_HTMLEND);
-  return content;
-}
-
 //initialize web server
 void pageInit() {
 #if defined SERIAL_ENABLED
@@ -356,35 +386,6 @@ void wifiManagerConnecting() {
   wifiManagerSetStatus(WIFIMANAGERSETSTATUS_CONNECTED);
 }
 
-//ddns eeprom read
-void ddnsEEPROMinit() {
-  EEPROM.begin(512);
-  delay(10);
-  ddnsEEPROMread();
-  if(ddnsConfiguration.initialized != 0x10) {
-#if defined SERIAL_ENABLED
-    Serial.println("Initialize eeprom");
-#endif
-    ddnsConfiguration.initialized = 0x10;
-    ddnsConfiguration.deviceid = 1;
-    strcpy(ddnsConfiguration.domain, "domain");
-    strcpy(ddnsConfiguration.token, "token");
-    ddnsConfiguration.updateinterval = 10;
-    ddnsEEPROMwrite();
-  }
-}
-
-//ddns eeprom read
-void ddnsEEPROMread() {
-  EEPROM.get(0, ddnsConfiguration);
-}
-
-//ddns eeprom write
-void ddnsEEPROMwrite() {
-  EEPROM.put(0, ddnsConfiguration);
-  EEPROM.commit();
-}
-
 //status led tick
 void ddnsStatusLedTick() {
   //toggle the led state
@@ -412,7 +413,8 @@ int ddnsUpdate() {
   int updateretries = 0;
   do {
     HTTPClient http;
-    http.begin(getrequest);
+    WiFiClient client; // Create a WiFiClient instance
+    http.begin(client, getrequest); // Use the new API
     int httpCode = http.GET();
     if(httpCode == HTTP_CODE_OK) {
       String payload = http.getString();
